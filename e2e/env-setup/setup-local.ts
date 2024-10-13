@@ -30,6 +30,9 @@ import {
   OPERATOR_1,
   SECURITY_COUNCIL_PRIVATE_KEY,
   CONTRACT_GAS_OPTIMIZATION_SWITCH_BLOCK,
+  SEQUENCER_RPC_URL,
+  L2_BESU_NODE_RPC_URL,
+  getProvider,
 } from "../src/utils/constants.local";
 import { deployContract } from "../src/utils/deployments";
 import { getAndIncreaseFeeData } from "../src/utils/helpers";
@@ -40,6 +43,8 @@ beforeAll(async () => {
   /*********** PROVIDERS SETUP ***********/
   const l1JsonRpcProvider = getL1Provider();
   const l2JsonRpcProvider = getL2Provider();
+  const sequencerJsonRpcProvider = getProvider(SEQUENCER_RPC_URL);
+  const l2BesuNodeJsonRpcProvider = getProvider(L2_BESU_NODE_RPC_URL);
 
   const l1Deployer = new Wallet(L1_DEPLOYER_ACCOUNT_PRIVATE_KEY, l1JsonRpcProvider);
   const l2Deployer = new Wallet(L2_DEPLOYER_ACCOUNT_PRIVATE_KEY, l2JsonRpcProvider);
@@ -73,6 +78,9 @@ beforeAll(async () => {
 
   global.l1Provider = l1JsonRpcProvider;
   global.l2Provider = l2JsonRpcProvider;
+  global.l2BesuNodeProvider = l2BesuNodeJsonRpcProvider;
+  global.sequencerProvider = sequencerJsonRpcProvider;
+  global.testContract = testContract;
   global.dummyContract = dummyContract;
   global.testContract = testContract;
   global.l1DummyContract = l1DummyContract;

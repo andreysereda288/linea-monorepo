@@ -4,14 +4,11 @@ import com.sksamuel.hoplite.Masked
 import io.restassured.RestAssured
 import io.restassured.builder.RequestSpecBuilder
 import io.restassured.http.ContentType
-import io.restassured.response.Response
 import io.restassured.specification.RequestSpecification
-import io.vertx.core.json.JsonObject
 import io.vertx.junit5.VertxExtension
 import kotlinx.datetime.Clock
 import net.consensys.encodeHex
 import net.consensys.linea.async.get
-import net.consensys.linea.transactionexclusion.TransactionExclusionServiceV1.SaveRejectedTransactionStatus
 import net.consensys.linea.transactionexclusion.app.AppConfig
 import net.consensys.linea.transactionexclusion.app.DatabaseConfig
 import net.consensys.linea.transactionexclusion.app.DbCleanupConfig
@@ -19,16 +16,14 @@ import net.consensys.linea.transactionexclusion.app.DbConnectionConfig
 import net.consensys.linea.transactionexclusion.app.PersistenceRetryConfig
 import net.consensys.linea.transactionexclusion.app.TransactionExclusionApp
 import net.consensys.linea.transactionexclusion.app.api.ApiConfig
-import net.consensys.linea.transactionexclusion.test.defaultRejectedTransaction
-import net.consensys.toHexString
 import net.consensys.trimToMillisecondPrecision
 import net.consensys.zkevm.persistence.db.DbHelper
 import net.consensys.zkevm.persistence.db.test.CleanDbTestSuiteParallel
-import org.assertj.core.api.Assertions.assertThat
+import net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 import java.time.Duration
 import kotlin.random.Random
 
@@ -67,153 +62,13 @@ class TransactionExclusionAppTest : CleanDbTestSuiteParallel() {
   private lateinit var requestSpecification: RequestSpecification
   private lateinit var app: TransactionExclusionApp
 
-  @AfterEach
-  fun afterEach() {
-    app.stop().get()
-  }
-
-  private fun makeJsonRpcRequest(request: JsonObject): Response {
-    return RestAssured.given()
-      .spec(requestSpecification)
-      .accept(ContentType.JSON)
-      .body(request.toString())
-      .`when`()
-      .post("/")
-  }
-
-  private fun buildRpcJsonWithNamedParams(method: String, params: Map<String, Any?>): JsonObject {
-    return JsonObject()
-      .put("id", "1")
-      .put("jsonrpc", "2.0")
-      .put("method", method)
-      .put("params", params)
-  }
-
-  private fun buildRpcJsonWithListParams(method: String, params: List<Any>): JsonObject {
-    return JsonObject()
-      .put("id", "1")
-      .put("jsonrpc", "2.0")
-      .put("method", method)
-      .put("params", params)
-  }
-
-  private fun buildSaveJsonRpcRequestWithNamedParams(
-    txRejectionStage: RejectedTransaction.Stage = defaultRejectedTransaction.txRejectionStage,
-    timestamp: String = defaultRejectedTransaction.timestamp.toString(),
-    transactionRLP: String = defaultRejectedTransaction.transactionRLP.encodeHex(),
-    blockNumber: String? = defaultRejectedTransaction.blockNumber?.toString(),
-    reasonMessage: String = defaultRejectedTransaction.reasonMessage,
-    overflows: List<ModuleOverflow> = defaultRejectedTransaction.overflows
-  ): JsonObject {
-    return buildRpcJsonWithNamedParams(
-      "linea_saveRejectedTransactionV1",
-      buildSaveRequestMapParams(
-        txRejectionStage = txRejectionStage,
-        timestamp = timestamp,
-        transactionRLP = transactionRLP,
-        blockNumber = blockNumber,
-        reasonMessage = reasonMessage,
-        overflows = overflows
-      )
-    )
-  }
-
-  private fun buildSaveJsonRpcRequestWithListParams(
-    txRejectionStage: RejectedTransaction.Stage = defaultRejectedTransaction.txRejectionStage,
-    timestamp: String = defaultRejectedTransaction.timestamp.toString(),
-    transactionRLP: String = defaultRejectedTransaction.transactionRLP.encodeHex(),
-    blockNumber: String? = defaultRejectedTransaction.blockNumber?.toString(),
-    reasonMessage: String = defaultRejectedTransaction.reasonMessage,
-    overflows: List<ModuleOverflow> = defaultRejectedTransaction.overflows
-  ): JsonObject {
-    return buildRpcJsonWithListParams(
-      "linea_saveRejectedTransactionV1",
-      listOf(
-        buildSaveRequestMapParams(
-          txRejectionStage = txRejectionStage,
-          timestamp = timestamp,
-          transactionRLP = transactionRLP,
-          blockNumber = blockNumber,
-          reasonMessage = reasonMessage,
-          overflows = overflows
-        )
-      )
-    )
-  }
-
-  private fun buildSaveRequestMapParams(
-    txRejectionStage: RejectedTransaction.Stage = defaultRejectedTransaction.txRejectionStage,
-    timestamp: String = defaultRejectedTransaction.timestamp.toString(),
-    transactionRLP: String = defaultRejectedTransaction.transactionRLP.encodeHex(),
-    blockNumber: String? = defaultRejectedTransaction.blockNumber?.toString(),
-    reasonMessage: String = defaultRejectedTransaction.reasonMessage,
-    overflows: List<ModuleOverflow> = defaultRejectedTransaction.overflows
-  ): Map<String, Any?> {
-    return mapOf(
-      "txRejectionStage" to txRejectionStage,
-      "timestamp" to timestamp,
-      "transactionRLP" to transactionRLP,
-      "blockNumber" to blockNumber,
-      "reasonMessage" to reasonMessage,
-      "overflows" to overflows
-    )
-  }
-
-  private fun buildGetJsonRpcRequest(
-    txHash: String
-  ): JsonObject {
-    return buildRpcJsonWithListParams(
-      "linea_getTransactionExclusionStatusV1",
-      listOf(txHash)
-    )
-  }
-
-  private fun assertSaveJsonRpcResponse(
-    saveJsonRpcResponse: JsonObject,
-    expectedStatus: SaveRejectedTransactionStatus,
-    expectedTxHash: String
-  ) {
-    saveJsonRpcResponse.getValue("result").let { result ->
-      assertThat(result).isNotNull
-      result as JsonObject
-      assertThat(result.getString("status")).isEqualTo(expectedStatus.toString())
-      assertThat(result.getString("txHash")).isEqualTo(expectedTxHash)
-    }
-  }
-
-  private fun assertGetJsonRpcResponse(
-    getJsonRpcResponse: JsonObject,
-    expectedTxRejectionStage: RejectedTransaction.Stage = defaultRejectedTransaction.txRejectionStage,
-    expectedTxHash: String = defaultRejectedTransaction.transactionInfo.hash.encodeHex(),
-    expectedReasonMessage: String = defaultRejectedTransaction.reasonMessage,
-    expectedFrom: String = defaultRejectedTransaction.transactionInfo.from.encodeHex(),
-    expectedNonce: String = defaultRejectedTransaction.transactionInfo.nonce.toHexString(),
-    expectedBlockNumber: String? = defaultRejectedTransaction.blockNumber?.toHexString(),
-    expectedTimestamp: String = defaultRejectedTransaction.timestamp.toString()
-  ) {
-    getJsonRpcResponse.getValue("result").let { result ->
-      assertThat(result).isNotNull
-      result as JsonObject
-      assertThat(result.getString("txHash")).isEqualTo(expectedTxHash)
-      assertThat(result.getString("txRejectionStage")).isEqualTo(expectedTxRejectionStage.toString())
-      assertThat(result.getString("reasonMessage")).isEqualTo(expectedReasonMessage)
-      assertThat(result.getString("from")).isEqualTo(expectedFrom)
-      assertThat(result.getString("nonce")).isEqualTo(expectedNonce)
-      assertThat(result.getString("blockNumber")).isEqualTo(expectedBlockNumber)
-      assertThat(result.getString("timestamp")).isEqualTo(expectedTimestamp)
-    }
-  }
-
-  private fun startTransactionExclusionApp(apiPort: Int) {
-    requestSpecification = RequestSpecBuilder()
-      .setBaseUri("http://localhost:$apiPort/")
-      .build()
-
+  @BeforeEach()
+  fun beforeEach() {
     app = TransactionExclusionApp(
       config = AppConfig(
         api = ApiConfig(
-          port = apiPort,
-          observabilityPort = apiPort + 10000,
+          port = 0, // port will be assigned under os
+          observabilityPort = 0, // port will be assigned under os
           numberOfVerticles = 1
         ),
         database = dbConfig,
@@ -221,208 +76,216 @@ class TransactionExclusionAppTest : CleanDbTestSuiteParallel() {
       )
     )
     app.start().get()
+
+    requestSpecification = RequestSpecBuilder()
+      .setBaseUri("http://localhost:${app.apiBindedPort}/")
+      .build()
   }
 
-  @ParameterizedTest
-  @ValueSource(ints = [8082])
-  fun `Should save the rejected tx from P2P and then from SEQUENCER with same txHash but different reason message`
-  (apiPort: Int) {
-    // Start the transaction exclusion app with the given api port
-    startTransactionExclusionApp(apiPort)
+  @AfterEach
+  fun afterEach() {
+    app.stop().get()
+  }
 
-    // Save the rejected tx from P2P without rejected block number
-    var rejectedTimestampISOString = Clock.System.now().trimToMillisecondPrecision().toString()
-    var saveJsonRpcRequest = buildSaveJsonRpcRequestWithNamedParams(
-      txRejectionStage = RejectedTransaction.Stage.P2P,
-      timestamp = rejectedTimestampISOString,
-      blockNumber = null // P2P node has no info on rejected block number
-    )
+  private fun makeRequestJsonResponse(request: String): String {
+    return RestAssured.given()
+      .spec(requestSpecification)
+      .accept(ContentType.JSON)
+      .body(request)
+      .`when`()
+      .post("/")
+      .then()
+      .statusCode(200)
+      .contentType("application/json")
+      .extract()
+      .asString()
+  }
 
-    // Send the save request and ensure it returns OK status code
-    var saveResponse = makeJsonRpcRequest(saveJsonRpcRequest)
-    saveResponse.then().statusCode(200).contentType("application/json")
+  private fun saveFirstRejectedTransaction() {
+    val saveTxJonRequest = """{
+      "jsonrpc": "2.0",
+      "id": 123,
+      "method": "linea_saveRejectedTransactionV1",
+      "params": {
+        "txRejectionStage": "P2P",
+        "timestamp": "${Clock.System.now().trimToMillisecondPrecision()}",
+        "transactionRLP": "0x02f8388204d2648203e88203e88203e8941195cf65f83b3a5768f3c496d3a05ad6412c64b38203e88c666d93e9cc5f73748162cea9c0017b8201c8",
+        "reasonMessage": "Transaction line count for module ADD=402 is above the limit 70",
+        "overflows": [
+          { "module": "ADD", "count": 402, "limit": 70 },
+          { "module": "MUL", "count": 587, "limit": 401 }
+        ]
+      }
+    }
+    """.trimIndent()
 
     // Check the save response and ensure the rejected txn was saved
-    var saveJsonRpcResponse = JsonObject(saveResponse.body.asString())
-    assertSaveJsonRpcResponse(
-      saveJsonRpcResponse = saveJsonRpcResponse,
-      expectedStatus = SaveRejectedTransactionStatus.SAVED,
-      expectedTxHash = defaultRejectedTransaction.transactionInfo.hash.encodeHex()
-    )
+    assertThatJson(makeRequestJsonResponse(saveTxJonRequest))
+      .isEqualTo(
+        """{
+          "jsonrpc": "2.0",
+          "id": 123,
+          "result": {"status":"SAVED","txHash":"0x526e56101cf39c1e717cef9cedf6fdddb42684711abda35bae51136dbb350ad7"}
+        }"""
+      )
+  }
 
-    // Send the get request and ensure it returns OK status code
-    var getJsonRpcRequest = buildGetJsonRpcRequest(
-      defaultRejectedTransaction.transactionInfo.hash.encodeHex()
-    )
-    var getResponse = makeJsonRpcRequest(getJsonRpcRequest)
-    getResponse.then().statusCode(200).contentType("application/json")
-
-    // Check the get response is corresponding to the rejected txn from P2P
-    var getJsonRpcResponse = JsonObject(getResponse.body.asString())
-    assertGetJsonRpcResponse(
-      getJsonRpcResponse = getJsonRpcResponse,
-      expectedTxRejectionStage = RejectedTransaction.Stage.P2P,
-      expectedBlockNumber = null,
-      expectedTimestamp = rejectedTimestampISOString
-    )
+  @Test
+  fun `Should save the rejected tx from P2P and then from SEQUENCER with same txHash but different reason message`() {
+    // Save the first rejected tx from P2P without rejected block number
+    saveFirstRejectedTransaction()
 
     // Save the rejected tx from SEQUENCER with rejected block number and different
     // rejected reason and a more recent rejected timestamp
-    rejectedTimestampISOString = Clock.System.now().trimToMillisecondPrecision().toString()
-    val rejectedReasonMessage = "Transaction line count for module MUL=587 is above the limit 400 (from e2e test)"
-    saveJsonRpcRequest = buildSaveJsonRpcRequestWithListParams(
-      txRejectionStage = RejectedTransaction.Stage.SEQUENCER,
-      timestamp = rejectedTimestampISOString,
-      reasonMessage = rejectedReasonMessage
-    )
+    val rejectionTimeStamp = Clock.System.now()
+      .trimToMillisecondPrecision()
+      .toString()
 
-    // Send the save request and ensure it returns OK status code
-    saveResponse = makeJsonRpcRequest(saveJsonRpcRequest)
-    saveResponse.then().statusCode(200).contentType("application/json")
+    val saveTxJonRequest = """{
+      "jsonrpc": "2.0",
+      "id": 124,
+      "method": "linea_saveRejectedTransactionV1",
+      "params": [{
+        "txRejectionStage": "SEQUENCER",
+        "timestamp": "$rejectionTimeStamp",
+        "transactionRLP": "0x02f8388204d2648203e88203e88203e8941195cf65f83b3a5768f3c496d3a05ad6412c64b38203e88c666d93e9cc5f73748162cea9c0017b8201c8",
+        "blockNumber": "10000",
+        "reasonMessage": "Transaction line count for module ADD=402 is above the limit 70 (from Sequencer)",
+        "overflows": [
+          { "module": "ADD", "count": 402, "limit": 70 },
+          { "module": "MUL", "count": 587, "limit": 401 }
+        ]
+      }]
+    }
+    """.trimIndent()
 
     // Check the save response and ensure the rejected txn was saved
-    saveJsonRpcResponse = JsonObject(saveResponse.body.asString())
-    assertSaveJsonRpcResponse(
-      saveJsonRpcResponse = saveJsonRpcResponse,
-      expectedStatus = SaveRejectedTransactionStatus.SAVED,
-      expectedTxHash = defaultRejectedTransaction.transactionInfo.hash.encodeHex()
-    )
+    assertThatJson(makeRequestJsonResponse(saveTxJonRequest))
+      .isEqualTo(
+        """{
+          "jsonrpc": "2.0",
+          "id": 124,
+          "result": {"status":"SAVED","txHash":"0x526e56101cf39c1e717cef9cedf6fdddb42684711abda35bae51136dbb350ad7"}
+        }"""
+      )
 
-    // Send the get request and ensure it returns OK status code
-    getJsonRpcRequest = buildGetJsonRpcRequest(
-      defaultRejectedTransaction.transactionInfo.hash.encodeHex()
-    )
-    getResponse = makeJsonRpcRequest(getJsonRpcRequest)
-    getResponse.then().statusCode(200).contentType("application/json")
+    // Send the get request for the rejected transaction
+    val getTxJsonRequest = """{
+      "jsonrpc": "2.0",
+      "id": 125,
+      "method": "linea_getTransactionExclusionStatusV1",
+      "params": ["0x526e56101cf39c1e717cef9cedf6fdddb42684711abda35bae51136dbb350ad7"]
+    }
+    """.trimIndent()
 
     // Check the get response is corresponding to the rejected txn from SEQUENCER
-    getJsonRpcResponse = JsonObject(getResponse.body.asString())
-    assertGetJsonRpcResponse(
-      getJsonRpcResponse = getJsonRpcResponse,
-      expectedTxRejectionStage = RejectedTransaction.Stage.SEQUENCER,
-      expectedReasonMessage = rejectedReasonMessage,
-      expectedTimestamp = rejectedTimestampISOString
-    )
+    assertThatJson(makeRequestJsonResponse(getTxJsonRequest))
+      .isEqualTo(
+        """{
+          "jsonrpc": "2.0",
+          "id": 125,
+          "result": {
+            "txHash": "0x526e56101cf39c1e717cef9cedf6fdddb42684711abda35bae51136dbb350ad7",
+            "from": "0x4d144d7b9c96b26361d6ac74dd1d8267edca4fc2",
+            "nonce": "0x64",
+            "txRejectionStage": "SEQUENCER",
+            "reasonMessage": "Transaction line count for module ADD=402 is above the limit 70 (from Sequencer)",
+            "timestamp": "$rejectionTimeStamp",
+            "blockNumber": "0x2710"
+          }
+        }"""
+      )
   }
 
-  @ParameterizedTest
-  @ValueSource(ints = [8083])
-  fun `Should return DUPLICATE_ALREADY_SAVED_BEFORE when saving rejected tx with same txHash and reason message`
-  (apiPort: Int) {
-    // Start the transaction exclusion app with the given api port
-    startTransactionExclusionApp(apiPort)
-
-    // Save the rejected tx from P2P without rejected block number
-    var rejectedTimestampISOString = Clock.System.now().trimToMillisecondPrecision().toString()
-    var saveJsonRpcRequest = buildSaveJsonRpcRequestWithNamedParams(
-      txRejectionStage = RejectedTransaction.Stage.P2P,
-      timestamp = rejectedTimestampISOString,
-      blockNumber = null
-    )
-
-    // Send the save request and ensure it returns OK status code
-    var saveResponse = makeJsonRpcRequest(saveJsonRpcRequest)
-    saveResponse.then().statusCode(200).contentType("application/json")
-
-    // Check the save response and ensure the rejected txn was saved
-    var saveJsonRpcResponse = JsonObject(saveResponse.body.asString())
-    assertSaveJsonRpcResponse(
-      saveJsonRpcResponse = saveJsonRpcResponse,
-      expectedStatus = SaveRejectedTransactionStatus.SAVED,
-      expectedTxHash = defaultRejectedTransaction.transactionInfo.hash.encodeHex()
-    )
+  @Test
+  fun `Should return DUPLICATE_ALREADY_SAVED_BEFORE when saving rejected tx with same txHash and reason message`() {
+    // Save the first rejected tx from P2P without rejected block number
+    saveFirstRejectedTransaction()
 
     // Save the same rejected tx from SEQUENCER with rejected block number and a more recent rejected timestamp
-    rejectedTimestampISOString = Clock.System.now().trimToMillisecondPrecision().toString()
-    saveJsonRpcRequest = buildSaveJsonRpcRequestWithNamedParams(
-      txRejectionStage = RejectedTransaction.Stage.SEQUENCER,
-      timestamp = rejectedTimestampISOString
-    )
+    val rejectionTimeStamp = Clock.System.now()
+      .trimToMillisecondPrecision()
+      .toString()
 
-    // Send the save request and ensure it returns OK status code
-    saveResponse = makeJsonRpcRequest(saveJsonRpcRequest)
-    saveResponse.then().statusCode(200).contentType("application/json")
+    val saveTxJonRequest = """{
+      "jsonrpc": "2.0",
+      "id": 124,
+      "method": "linea_saveRejectedTransactionV1",
+      "params": [{
+        "txRejectionStage": "SEQUENCER",
+        "timestamp": "$rejectionTimeStamp",
+        "transactionRLP": "0x02f8388204d2648203e88203e88203e8941195cf65f83b3a5768f3c496d3a05ad6412c64b38203e88c666d93e9cc5f73748162cea9c0017b8201c8",
+        "blockNumber": "10000",
+        "reasonMessage": "Transaction line count for module ADD=402 is above the limit 70",
+        "overflows": [
+          { "module": "ADD", "count": 402, "limit": 70 },
+          { "module": "MUL", "count": 587, "limit": 401 }
+        ]
+      }]
+    }
+    """.trimIndent()
 
     // Check the save response and ensure the status is "duplicated already saved before"
-    saveJsonRpcResponse = JsonObject(saveResponse.body.asString())
-    assertSaveJsonRpcResponse(
-      saveJsonRpcResponse = saveJsonRpcResponse,
-      expectedStatus = SaveRejectedTransactionStatus.DUPLICATE_ALREADY_SAVED_BEFORE,
-      expectedTxHash = defaultRejectedTransaction.transactionInfo.hash.encodeHex()
-    )
+    assertThatJson(makeRequestJsonResponse(saveTxJonRequest))
+      .isEqualTo(
+        """{
+          "jsonrpc": "2.0",
+          "id": 124,
+          "result": {"status":"DUPLICATE_ALREADY_SAVED_BEFORE","txHash":"0x526e56101cf39c1e717cef9cedf6fdddb42684711abda35bae51136dbb350ad7"}
+        }"""
+      )
   }
 
-  @ParameterizedTest
-  @ValueSource(ints = [8084])
-  fun `Should return result as null when getting the rejected tx with random transaction hash`(apiPort: Int) {
-    // Start the transaction exclusion app with the given api port
-    startTransactionExclusionApp(apiPort)
+  @Test
+  fun `Should return result as null when getting the rejected tx with random transaction hash`() {
+    // Save the first rejected tx from P2P without rejected block number
+    saveFirstRejectedTransaction()
 
-    // Save the rejected tx from P2P without rejected block number
-    var rejectedTimestampISOString = Clock.System.now().trimToMillisecondPrecision().toString()
-    var saveJsonRpcRequest = buildSaveJsonRpcRequestWithNamedParams(
-      txRejectionStage = RejectedTransaction.Stage.P2P,
-      timestamp = rejectedTimestampISOString,
-      blockNumber = null
-    )
-
-    // Send the save request and ensure it returns OK status code
-    var saveResponse = makeJsonRpcRequest(saveJsonRpcRequest)
-    saveResponse.then().statusCode(200).contentType("application/json")
-
-    // Check the save response and ensure the rejected txn was saved
-    var saveJsonRpcResponse = JsonObject(saveResponse.body.asString())
-    assertSaveJsonRpcResponse(
-      saveJsonRpcResponse = saveJsonRpcResponse,
-      expectedStatus = SaveRejectedTransactionStatus.SAVED,
-      expectedTxHash = defaultRejectedTransaction.transactionInfo.hash.encodeHex()
-    )
-
-    // Send the get request and ensure it returns OK status code
-    val getJsonRpcRequest = buildGetJsonRpcRequest(
-      Random.nextBytes(32).encodeHex()
-    )
-    val getResponse = makeJsonRpcRequest(getJsonRpcRequest)
-    getResponse.then().statusCode(200).contentType("application/json")
+    // Send the get request with a random txn hash
+    val getTxJsonRequest = """{
+      "jsonrpc": "2.0",
+      "id": 124,
+      "method": "linea_getTransactionExclusionStatusV1",
+      "params": ["${Random.nextBytes(32).encodeHex()}"]
+    }
+    """.trimIndent()
 
     // Check the get response and ensure the result is null
-    val getJsonRpcResponse = JsonObject(getResponse.body.asString())
-    getJsonRpcResponse.getValue("result").let { result ->
-      assertThat(result).isNull()
-    }
+    assertThatJson(makeRequestJsonResponse(getTxJsonRequest))
+      .isEqualTo(
+        """{
+          "jsonrpc": "2.0",
+          "id": 124,
+          "result": null
+        }"""
+      )
   }
 
-  @ParameterizedTest
-  @ValueSource(ints = [8085])
-  fun `Should return error result when saving rejected tx without rejected timestamp and reason message`(apiPort: Int) {
-    // Start the transaction exclusion app with the given api port
-    startTransactionExclusionApp(apiPort)
-
-    // Save the rejected tx from P2P without rejected timestamp and reason message
-    val saveJsonRpcRequest = buildRpcJsonWithNamedParams(
-      "linea_saveRejectedTransactionV1",
-      mapOf(
-        "txRejectionStage" to RejectedTransaction.Stage.P2P,
-        "transactionRLP" to defaultRejectedTransaction.transactionRLP.encodeHex(),
-        "overflows" to defaultRejectedTransaction.overflows
-      )
-    )
-
-    // Send the save request and ensure it returns OK status code
-    val saveResponse = makeJsonRpcRequest(saveJsonRpcRequest)
-    saveResponse.then().statusCode(200).contentType("application/json")
-
-    // Check the save response and ensure the error with proper code and message
-    val saveJsonRpcResponse = JsonObject(saveResponse.body.asString())
-    saveJsonRpcResponse.getValue("result").let { result ->
-      assertThat(result).isNull()
+  @Test
+  fun `when transaction request is invalid shall return error`() {
+    val saveTxJonRequest = """{
+      "jsonrpc": "2.0",
+      "id": 123,
+      "method": "linea_saveRejectedTransactionV1",
+      "params": [{
+        "txRejectionStage": "SEQUENCER",
+        "transactionRLP": "0x02f8388204d2648203e88203e88203e8941195cf65f83b3a5768f3c496d3a05ad6412c64b38203e88c666d93e9cc5f73748162cea9c0017b8201c8",
+        "blockNumber": "10000",
+        "reasonMessage": "Transaction line count for module ADD=402 is above the limit 70"
+      }]
     }
-    saveJsonRpcResponse.getValue("error").let { error ->
-      error as JsonObject
-      assertThat(error.getInteger("code")).isEqualTo(-32602)
-      assertThat(error.getString("message")).isEqualTo(
-        "Missing [timestamp,reasonMessage] from the given request params"
+    """.trimIndent()
+
+    assertThatJson(makeRequestJsonResponse(saveTxJonRequest))
+      .isEqualTo(
+        """{
+          "jsonrpc": "2.0",
+          "id": 123,
+          "error": {
+            "code": -32602,
+            "message": "Missing [timestamp,overflows] from the given request params"
+          }
+        }"""
       )
-    }
   }
 }
