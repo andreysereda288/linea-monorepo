@@ -64,15 +64,20 @@ class Api(
           configs.observabilityPort
         )
       )
-    val httpServer = HttpJsonRpcServer(configs.port.toUInt(), configs.path, HttpRequestHandler(messageHandler))
+    var httpServer: HttpJsonRpcServer? = null
     return vertx
       .deployVerticle(
-        httpServer,
+        {
+          HttpJsonRpcServer(configs.port.toUInt(), configs.path, HttpRequestHandler(messageHandler))
+            .also {
+              httpServer = it
+            }
+        },
         DeploymentOptions().setInstances(numberOfVerticles)
       )
       .compose { verticleId: String ->
         jsonRpcServerId = verticleId
-        serverPort = httpServer.bindedPort
+        serverPort = httpServer!!.bindedPort
         vertx.deployVerticle(observabilityServer).onSuccess { monitorVerticleId ->
           this.observabilityServerId = monitorVerticleId
         }
