@@ -23,6 +23,7 @@ declare global {
   var L1_ACCOUNT_0_PRIVATE_KEY: string;
   var L2_ACCOUNT_0_PRIVATE_KEY: string;
   var L2_ACCOUNT_1_PRIVATE_KEY: string;
+  var L2_ACCOUNT_2_PRIVATE_KEY: string;
   var L1_DEPLOYER_ACCOUNT_PRIVATE_KEY: string;
   var L2_DEPLOYER_ACCOUNT_PRIVATE_KEY: string;
   var TRANSACTION_CALLDATA_LIMIT: number;

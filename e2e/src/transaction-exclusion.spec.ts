@@ -19,7 +19,7 @@ const transactionExclusionTestSuite = (title: string) => {
         return;
       }
 
-      const account = new Wallet(L2_ACCOUNT_1_PRIVATE_KEY, l2BesuNodeProvider);
+      const account = new Wallet(L2_ACCOUNT_2_PRIVATE_KEY, l2BesuNodeProvider);
 
       const [nonce, feeData] = await Promise.all([
         l2Provider.getTransactionCount(account.address),
@@ -59,7 +59,7 @@ const transactionExclusionTestSuite = (title: string) => {
         return;
       }
 
-      const account = new Wallet(L2_ACCOUNT_1_PRIVATE_KEY, sequencerProvider);
+      const account = new Wallet(L2_ACCOUNT_2_PRIVATE_KEY, sequencerProvider);
 
       const [nonce, feeData] = await Promise.all([
         l2Provider.getTransactionCount(account.address),
