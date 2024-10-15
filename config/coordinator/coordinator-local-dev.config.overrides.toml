@@ -6,37 +6,26 @@ endpoint="http://127.0.0.1:9000"
 
 [data-submission-signer.web3signer]
 endpoint="http://127.0.0.1:9000"
-#private-key="0x4c21e6e898b8ed32c42ba00611af71059de5ae1422b7d8587e110de184a97223" #JONES: local run on real L1
 
 [l2-signer.web3signer]
 endpoint="http://127.0.0.1:9000"
 
 [prover]
 [prover.execution]
-fs-requests-directory = "tmp/local/prover/v3/execution/requests"
-fs-responses-directory = "tmp/local/prover/v3/execution/responses"
+fs-requests-directory = "tmp/local/prover/v2/execution/requests"
+fs-responses-directory = "tmp/local/prover/v2/execution/responses"
 [prover.blob-compression]
-fs-requests-directory = "tmp/local/prover/v3/compression/requests"
-fs-responses-directory = "tmp/local/prover/v3/compression/responses"
+fs-requests-directory = "tmp/local/prover/v2/compression/requests"
+fs-responses-directory = "tmp/local/prover/v2/compression/responses"
 [prover.proof-aggregation]
-fs-requests-directory = "tmp/local/prover/v3/aggregation/requests"
-fs-responses-directory = "tmp/local/prover/v3/aggregation/responses"
-
-[blob-compression]
-#blob-size-limit=12800 #5120
-batches-limit=1
-
-[proof-aggregation]
-aggregation-proofs-limit=20 #12 #4
+fs-requests-directory = "tmp/local/prover/v2/aggregation/requests"
+fs-responses-directory = "tmp/local/prover/v2/aggregation/responses"
 
 [zk-traces]
-eth-api="http://127.0.0.1:8745" #8745
-new-block-polling-interval="PT2S"
+eth-api="http://127.0.0.1:8645"
 
 # Config of Traces API Facade endpoint
 [traces]
-switch-to-linea-besu=true
-expected-traces-api-version-v2="v0.8.0-rc3"
 [traces.counters]
 endpoints=["http://127.0.0.1:8080/"]
 [traces.conflation]
@@ -45,76 +34,34 @@ endpoints=["http://127.0.0.1:8080/"]
 traces-file-extension = "json.gz"
 raw-traces-directory = "tmp/local/traces/raw"
 non-canonical-raw-traces-directory = "tmp/local/traces/raw-non-canonical"
-[traces.counters-v2]
-endpoints=["http://127.0.0.1:8745/"]
-request-limit-per-endpoint=20
-request-retry.max-retries=4
-request-retry.backoff-delay="PT1S"
-request-retry.failures-warning-threshold=2
-[traces.conflation-v2]
-endpoints=["http://127.0.0.1:8745/"]
-request-limit-per-endpoint=2
-request-retry.max-retries=4
-request-retry.backoff-delay="PT1S"
-request-retry.failures-warning-threshold=2
 
 [state-manager]
 endpoints=["http://127.0.0.1:8998/"]
 
-[l1-dynamic-gas-price-cap-service]
-disabled=false
-[l1-dynamic-gas-price-cap-service.gas-price-cap-calculation]
-adjustment-constant=5
-blob-adjustment-constant=5
-#finalization-target-max-delay="PT32H"
-gas-fee-percentile-window="P7D"
-gas-fee-percentile-window-leeway="PT10M"
-gas-fee-percentile=40.0
-gas-price-caps-check-coefficient=0.9
-historic-base-fee-per-blob-gas-lower-bound=100000000
-historic-avg-reward-constant=100000000
-[l1-dynamic-gas-price-cap-service.fee-history-fetcher]
-fetch-interval="PT2S"
-#endpoint="https://sepolia.infura.io/v3/21ec9d6293cf4b00beb818ab19e87f2a" #""https://sepolia.infura.io/v3/646b7f6805914daeb6171d3c606e3977" #"https://mainnet.infura.io/v3/646b7f6805914daeb6171d3c606e3977"
-max-block-count=1000
-reward-percentiles=[10,20,30,40,50,60,70,80,90,100]
-num-of-blocks-before-latest=4
-[l1-dynamic-gas-price-cap-service.fee-history-storage]
-storage-period="P10D"
+[dynamic-gas-price-service]
+geth-gas-price-update-recipients=[
+  "http://127.0.0.1:8645",
+  "http://127.0.0.1:8845"
+]
+besu-gas-price-update-recipients=[
+  "http://127.0.0.1:8545/"
+]
+extra-data-update-recipient="http://127.0.0.1:8545/"
 
 [l1]
 rpc-endpoint="http://127.0.0.1:8445"
-#rpc-endpoint="https://mainnet.infura.io/v3/646b7f6805914daeb6171d3c606e3977" #JONES: local run on real L1
-#zk-evm-contract-address="0xd19d4B5d358258f05D7B411E21A1460D11B0876F" #JONES: local run on real L1
+blocks-to-finalization=2
 # blocks are 2s, this may catch in between blocks
 send-message-event-polling-interval="PT1S"
 # 10 blocks worth at 2s per block
 max-event-scraping-time="PT20S"
-block-time="PT12S"
 block-range-loop-limit=10000
 finalized-block-tag="finalized"
 earliestBlock=0
-eth-fee-history-endpoint="https://mainnet.infura.io/v3/646b7f6805914daeb6171d3c606e3977"
-max-fee-per-gas-cap=52000000000
-max-fee-per-blob-gas-cap=26000000000
-max-priority-fee-per-gas-cap=400000000
-gas-price-cap-multiplier-for-finalization=1.5
 
 [l2]
-rpc-endpoint="http://127.0.0.1:8845"
-blocks-to-finalization=2
-
-[l2-network-gas-pricing.extra-data-pricing-propagation]
-extra-data-update-recipient="http://127.0.0.1:8545/"
-
-[l2-network-gas-pricing.json-rpc-pricing-propagation]
-geth-gas-price-update-recipients=[
-  # "http://127.0.0.1:8645", # need to remove
-  "http://127.0.0.1:8845"
-]
-besu-gas-price-update-recipients=[
-  # "http://127.0.0.1:8545/"
-]
+rpc-endpoint="http://127.0.0.1:8645"
+blocks-to-finalization=0
 
 [database]
 host="localhost"
@@ -126,7 +73,4 @@ observability_port=9546
 endpoints = ["http://127.0.0.1:8889/"]
 
 [conflation]
-#conflation-deadline="PT60S"
-conflation-deadline="PT10M"
-conflation-deadline-check-interval="PT4S"
-conflation-deadline-last-block-confirmation-delay="PT12S"
+#switch-block-number=20
